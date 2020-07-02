@@ -1,13 +1,17 @@
 ---
-cover: https://spring.io/images/spring-logo-9146a4d3298760c2e7e49595184e1975.svg
-categories: Java
+title: Spring源码分析-BeanFactoryPostProcessor
+data: 2020-06-30
+cover: https://ss2.bdstatic.com/70cFvnSh_Q1YnxGkpoWK1HF6hhy/it/u=3827979352,1501043192&fm=26&gp=0.jpg
+top_img: https://spring.io/images/spring-logo-9146a4d3298760c2e7e49595184e1975.svg
+categories:
+	- java
+	- spring
 tags:
-	- Java
-	- Spring
+	- java
+	- spring
 	- 源码分析
 ---
 
-<!-- toc -->
 
 `BeanFactoryPostProcessor`是实现spring容器功能扩展的重要接口，例如修改bean属性值。很多框架都是通过此接口实现对spring容器的扩展，例如Mybatis(后面会说)
 

@@ -1,19 +1,24 @@
 ---
-cover: https://spring.io/images/spring-logo-9146a4d3298760c2e7e49595184e1975.svg
-categories: Java
+title: Spring源码分析-BeanDefintion
+data: 2020-06-30
+cover: https://ss2.bdstatic.com/70cFvnSh_Q1YnxGkpoWK1HF6hhy/it/u=3827979352,1501043192&fm=26&gp=0.jpg
+top_img: https://spring.io/images/spring-logo-9146a4d3298760c2e7e49595184e1975.svg
+categories:
+	- java
+	- spring
 tags:
-	- Java
-	- Spring
+	- java
+	- spring
 	- 源码分析
 ---
 
-<!-- toc -->
 
 ## 一、BeanDefinition源码解析
 
 
 ### 常量
-```
+
+```java
 // 单例
 String SCOPE_SINGLETON = ConfigurableBeanFactory.SCOPE_SINGLETON;
 
@@ -27,7 +32,7 @@ String SCOPE_PROTOTYPE = ConfigurableBeanFactory.SCOPE_PROTOTYPE;
 parentName在AbstractBeanDefinition没有实现，而是在各个子类中实现的。
 
 BeanDefinition
-```
+```java
 void setParentName(@Nullable String parentName);
 
 @Nullable
@@ -35,7 +40,7 @@ String getParentName();
 ```
 ChildBeanDefinition
 ChildBeanDefinition在实例化对象时，必须传入ParentName
-```
+```java
 @Nullable
 private String parentName;
 public ChildBeanDefinition(String parentName) {
@@ -55,7 +60,7 @@ public String getParentName() {
 ```
 RootBeanDefinition
 RootBeanDefinition无法设置parentName
-```
+```java
 @Override
 public String getParentName() {
    return null;
@@ -71,7 +76,8 @@ public void setParentName(@Nullable String parentName) {
 GenericBeanDefinition
 GenericBeanDefinition是Spring2.5之后新加入的一个类，GenericBeanDefinition类似于RootBeanDefinition和ChildBeanDefinition的结合体，它既可以表示"父类"模板也可以表示"子类"对象
 RootBeanDefinition和ChildBeanDefinition是Spring 2.5之前的，ChildBeanDefinition必须要有parentName，RootBeanDefinition不能设置parentName
-```
+
+```java
 @Nullable
 private String parentName;
 @Override
@@ -88,14 +94,15 @@ public String getParentName() {
 
 #### 2. BeanClassName
 类全名
-```
+
+```java
 void setBeanClassName(@Nullable String beanClassName);
 
 @Nullable
 String getBeanClassName();
 ```
 setBeanClassName和getBeanClassName是在BeanDefinition的字了AbstractBeanDefinition中实现的
-```
+```java
 @Nullable
 private volatile Object beanClass;
 
@@ -141,23 +148,23 @@ public Class<?> getBeanClass() throws IllegalStateException {
 设置bean作用域
 
 使用
-```
+```java
 <bean id="testConstArgService" class="com.lexi.service.TestConstArgService" scope="singleton">
 </bean>
 ```
 或者
-```
+```java
 @Scope(BeanDefinition.SCOPE_SINGLETON)
 ```
 BeanDefinition
-```
+```java
 void setScope(@Nullable String scope);
 
 @Nullable
 String getScope();
 ```
 实现 AbstractBeanDefinition
-```
+```java
 @Nullable
 private String scope = SCOPE_DEFAULT;
 
@@ -186,23 +193,23 @@ public boolean isPrototype() {
 ```
 #### 4. lazyInit
 xml 
-```
+```java
 <bean id="testConstArgService" class="com.lexi.service.TestConstArgService" lazy-init="true">
 </bean>
 ```
 注解
-```
+```java
 @Lazy(true)
 ```
 
 BeanDefinition
-```
+```java
 void setLazyInit(boolean lazyInit);
 
 boolean isLazyInit();
-```
+```java
 AbstractBeanDefinition
-```
+```java
 @Nullable
 private Boolean lazyInit;
 @Override
@@ -220,23 +227,23 @@ public boolean isLazyInit() {
 我们有这么一个需求，实例化某一个类之前，需要先实例化另外一个类。这时就用到了DependsOn
 
 XML
-```
+```java
 <bean id="testConstArgService" class="com.lexi.service.TestConstArgService" depends-on="testService">
 </bean>
 ```
 注解
-```
+```java
 @DependsOn("testService")
 ```
 BeanDefinition
-```
+```java
 void setDependsOn(@Nullable String... dependsOn);
 
 @Nullable
 String[] getDependsOn();
 ```
 AbstractBeanDefinition
-```
+```java
 @Nullable
 private String[] dependsOn;
 @Override
@@ -259,13 +266,13 @@ public String[] getDependsOn() {
 此属性只可以在XML设置
 
 XML
-```
+```java
 <bean id="helloService2" class="com.lexi.service.HelloService2" autowire-candidate="false">
 </bean>
 ```
 
 BeanDefinition
-```
+```java
 void setAutowireCandidate(boolean autowireCandidate);
 
 boolean isAutowireCandidate();
@@ -273,7 +280,7 @@ boolean isAutowireCandidate();
 
 AbstractBeanDefinition
 
-```
+```java
 private boolean autowireCandidate = true;
 
 @Override
@@ -291,14 +298,14 @@ public boolean isAutowireCandidate() {
 和上面一样的场景，只是Primary表示自动装配时优先装配当前对象
 
 BeanDefinition
-```
+```java
 void setPrimary(boolean primary);
 
 boolean isPrimary();
 ```
 
 AbstractBeanDefinition
-```
+```java
 private boolean primary = false;
 @Override
 public void setPrimary(boolean primary) {
@@ -315,14 +322,14 @@ public boolean isPrimary() {
 ```
 #### 8. FactoryBeanName(待完善)
 BeanDefinition
-```
+```java
 void setFactoryBeanName(@Nullable String factoryBeanName);
 
 @Nullable
 String getFactoryBeanName();
 ```
 AbstractBeanDefinition
-```
+```java
 @Nullable
 private String factoryBeanName;
 @Override
@@ -338,14 +345,14 @@ public String getFactoryBeanName() {
 ```
 #### 9. FactoryMethodName（待完善）
 BeanDefinition
-```
+```java
 void setFactoryMethodName(@Nullable String factoryMethodName);
 
 @Nullable
 String getFactoryMethodName();
 ```
 AbstractBeanDefinition
-```
+```java
 @Nullable
 private String factoryMethodName;
 @Override
@@ -365,26 +372,26 @@ public String getFactoryMethodName() {
 #### 10. ConstructorArgumentValues
 实例化对象时的构造方法的参数，只有XML配置constructor-arg时才有此参数，注解不会有此参数
 
-```
+```java
 <bean id="helloService" class="com.lexi.service.HelloService">
     <constructor-arg name="name" value="lexi"></constructor-arg>
 </bean>
 ```
 or
-```
+```java
 <bean id="helloService" class="com.lexi.service.HelloService">
     <constructor-arg index="0" value="lexi"></constructor-arg>
 </bean>
 ```
 or
-```
+```java
 <bean id="helloService" class="com.lexi.service.HelloService">
     <constructor-arg value="lexi"></constructor-arg>
 </bean>
 ```
 
 BeanDefinition
-```
+```java
 ConstructorArgumentValues getConstructorArgumentValues();
 
 default boolean hasConstructorArgumentValues() {
@@ -393,7 +400,7 @@ default boolean hasConstructorArgumentValues() {
 ```
 
 AbstractBeanDefinition
-```
+```java
 @Nullable
 private ConstructorArgumentValues constructorArgumentValues;
 
@@ -411,14 +418,14 @@ public boolean hasConstructorArgumentValues() {
 }
 ```
 其中ConstructorArgumentValues中是通过
-```
+```java
 private final Map<Integer, ValueHolder> indexedArgumentValues = new LinkedHashMap<>();
 
 private final List<ValueHolder> genericArgumentValues = new ArrayList<>();
 ```
 来存储参数的
 如果是
-```
+```java
 <bean id="helloService" class="com.lexi.service.HelloService">
     <constructor-arg value="lexi" index="0"></constructor-arg>
     <constructor-arg value="1" index="1"></constructor-arg>
@@ -434,7 +441,7 @@ private final List<ValueHolder> genericArgumentValues = new ArrayList<>();
 Bean中定义的属性的值，注意，这边只有XML定义的`<property>`才会有值，直接在类中通过`@Autowired`标注的不会出现在这边
 
 XML
-```
+```java
 <bean id="testService" class="com.lexi.service.TestService">
     <property name="helloService" ref="helloService"></property>
 </bean>
@@ -442,7 +449,7 @@ XML
 
 BeanDefinition
 
-```
+```java
 MutablePropertyValues getPropertyValues();
 
 default boolean hasPropertyValues() {
@@ -450,7 +457,8 @@ default boolean hasPropertyValues() {
 }
 ```
 AbstarctBeanDefinition
-```
+
+```java
 @Nullable
 private MutablePropertyValues propertyValues;
 
@@ -467,11 +475,11 @@ public boolean hasPropertyValues() {
 }
 ```
 其中MutablePropertyValues是通过一个`List`来存储数据的
-```
+```java
 private final List<PropertyValue> propertyValueList;
 ```
 PropertyValue部分源码如下
-```
+```java
 public class PropertyValue extends BeanMetadataAttributeAccessor implements Serializable {
 
    private final String name;
@@ -487,13 +495,13 @@ Bean的初始化方法
 注意：这边只有通过XML的`init-method`配置时，当字段才会有值，如果通过注解的`@PostConstruct`配置的，当前字段不会有值
 
 XML
-```
+```java
 <bean id="helloService" class="com.lexi.service.HelloService" init-method="init">
 </bean>
 ```
 
 BeanDefinition
-```
+```java
 void setInitMethodName(@Nullable String initMethodName);
 
 @Nullable
@@ -501,7 +509,7 @@ String getInitMethodName();
 ```
 
 AbstractBeanDefinition
-```
+```java
 @Nullable
 private String initMethodName;
 /**
@@ -526,20 +534,20 @@ public String getInitMethodName() {
 Bean的生命周期销毁方法，同上，只有当通过XML的`destroy-method`配置时，当前字段才有值，如果通过注解的`@PreDestroy`，当前字段无值。
 
 XML配置
-```
+```java
 <bean id="helloService" class="com.lexi.service.HelloService" destroy-method="destory">
 </bean>
 ```
 
 BeanDefinition
-```
+```java
 void setDestroyMethodName(@Nullable String destroyMethodName);
 
 @Nullable
 String getDestroyMethodName();
 ```
 AbstractBeanDefinition
-```
+```java
 @Nullable
 private String destroyMethodName;
 
@@ -557,18 +565,19 @@ public String getDestroyMethodName() {
 #### 14. Description
 添加Bean的注解描述,目前只能通过注解添加，在此猜测将来注解会不会完全取代xml
 
-```
+```java
 @Description("这是个描述")
 ```
 BeanDefinition
-```
+
+```java
 void setDescription(@Nullable String description);
 
 @Nullable
 String getDescription();
 ```
 AbstarctBeanDefinition
-```
+```java
 @Nullable
 private String description;
 
@@ -589,14 +598,14 @@ public String getDescription() {
 
 
 BeanDefinition
-```
+```java
 boolean isSingleton();
 
 boolean isPrototype();
 ```
 AbstractBeanDefinition
 
-```
+```java
 @Override
 public boolean isSingleton() {
    return SCOPE_SINGLETON.equals(this.scope) || SCOPE_DEFAULT.equals(this.scope);
@@ -620,14 +629,14 @@ abstract和parent一样，只能用在xml上
 
 XML
 
-```
+```java
 <bean id="abstarctService" lazy-init="true" scope="prototype" abstract="true"></bean>
 <bean id="helloService" parent="abstarctService" class="com.lexi.client.HelloService"></bean>
 ```
 
 BeanDefinition
 
-```
+```java
 boolean isPrototype();
 
 boolean isAbstract();
@@ -635,7 +644,7 @@ boolean isAbstract();
 
 AbstractBeanDefinition
 
-```
+```java
 private boolean abstractFlag = false;
 
 public void setAbstract(boolean abstractFlag) {
@@ -647,11 +656,6 @@ public boolean isAbstract() {
    return this.abstractFlag;
 }
 ```
-
-
-
-
-
 
 
 
@@ -667,7 +671,7 @@ BeanDefinition继承关系如上图所示。
 
 
 
-```
+```java
 
 public interface AttributeAccessor {
 
@@ -691,7 +695,7 @@ AttributeAccessorSupport 是对接口AttributeAccessor的实现，其内部维�
 
 由AttributeAccessorSupport实现，内部维护了一个
 
-```
+```java
 
 private final Map<String, Object> attributes = new LinkedHashMap<>();
 
@@ -704,7 +708,7 @@ private final Map<String, Object> attributes = new LinkedHashMap<>();
 ### 2. BeanMetadataElement
 BeanDefinition的另一个接口是BeanMetadataElement，定义了对BeanDefinition所描述的类的源文件
 
-```
+```java
 
 public interface BeanMetadataElement {
    @Nullable
@@ -720,7 +724,8 @@ public interface BeanMetadataElement {
 
 ### 3. BeanMetadataAttributeAccessor
 BeanMetadataAttributeAccessor实现了`BeanMetadataElement`表示其拥有操作BeanDefinition所描述类源文件的能力
-```
+
+```java
 @Nullable
 private Object source;
 

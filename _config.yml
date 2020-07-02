@@ -4,18 +4,18 @@
 
 # Site
 title: Lexi想学Java
-subtitle: ''
-description: ''
-keywords:
+subtitle: 教练，我想学java
+description: 一只混迹于互联网五年的老鸟，除了老，其他啥也没留下 <br/><a href='http://47.101.57.44/'>博客阿里云地址</a>
+keywords: Java，java，Spring，spring，源码分析，Mybatis，mybatis
 author: Lexi Ren
-language: zh-CH
+language: zh-CN
 timezone: ''
 
 # URL
 ## If your site is put in a subdirectory, set url as 'http://yoursite.com/child' and root as '/child/'
-url: http://yoursite.com
+url: http://blog.renjilin.online
 root: /
-permalink: :year/:month/:day/:title/
+permalink: :category/:title.html
 permalink_defaults:
 pretty_urls:
   trailing_index: true # Set to false to remove trailing 'index.html' from permalinks
