@@ -1,16 +1,21 @@
 ---
-cover: https://spring.io/images/spring-logo-9146a4d3298760c2e7e49595184e1975.svg
-categories: Java
+title: Spring源码分析-spring aop 
+data: 2020-07-01
+cover: https://ss2.bdstatic.com/70cFvnSh_Q1YnxGkpoWK1HF6hhy/it/u=3827979352,1501043192&fm=26&gp=0.jpg
+top_img: https://spring.io/images/spring-logo-9146a4d3298760c2e7e49595184e1975.svg
+categories:
+	- java
+	- spring
 tags:
-	- Java
-	- Spring
+	- java
+	- spring
 	- 源码分析
 ---
 
 ### 引入
 
 SpringAop使用的是`@EnableAspectJAutoProxy`注解，点进去看看源码
-```
+```java
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
@@ -25,7 +30,7 @@ public @interface EnableAspectJAutoProxy {
 发现`EnableAspectJAutoProxy`注解内部引用了一个`@Import`注解，引入了一个`AspectJAutoProxyRegistrar`类，具体作用详见 Spring @Import.md
 
 我们看一下`AspectJAutoProxyRegistrar`类
-```
+```java
 class AspectJAutoProxyRegistrar implements ImportBeanDefinitionRegistrar {
 
    /**
@@ -53,14 +58,15 @@ class AspectJAutoProxyRegistrar implements ImportBeanDefinitionRegistrar {
 }
 ```
 发现`AopConfigUtils.registerAspectJAnnotationAutoProxyCreatorIfNecessary(registry);`注入了一个`ProxyCreator`,继续跟进
-```
+
+```java
 @Nullable
 public static BeanDefinition registerAspectJAnnotationAutoProxyCreatorIfNecessary(BeanDefinitionRegistry registry) {
    return registerAspectJAnnotationAutoProxyCreatorIfNecessary(registry, null);
 }
 ```
 
-```
+```java
 @Nullable
 public static BeanDefinition registerAspectJAnnotationAutoProxyCreatorIfNecessary(
       BeanDefinitionRegistry registry, @Nullable Object source) {
@@ -69,7 +75,7 @@ public static BeanDefinition registerAspectJAnnotationAutoProxyCreatorIfNecessar
 }
 ```
 
-```
+```java
 private static BeanDefinition registerOrEscalateApcAsRequired(
       Class<?> cls, BeanDefinitionRegistry registry, @Nullable Object source) {
 
@@ -188,7 +194,7 @@ public abstract class AbstractAutoProxyCreator extends ProxyProcessorSupport
 ### 创建代理对象
 
 通过上面的代码我们可以知道代理对象是通过`createProxy`方法创建的，那我们就看看这个方法
-```
+```java
 protected Object createProxy(
         Class<?> beanClass, String beanName, Object[] specificInterceptors, TargetSource targetSource) {
 
@@ -239,7 +245,7 @@ public Object getProxy(ClassLoader classLoader) {
 
 getProxy 这里有两个方法调用，一个是调用 createAopProxy 创建 AopProxy 实现类对象，然后再调用 AopProxy 实现类对象中的 getProxy 创建代理对象。这里我们先来看一下创建 AopProxy 实现类对象的过程，如下：
 
-```
+```java
 protected final synchronized AopProxy createAopProxy() {
     if (!this.active) {
         activate();
@@ -286,7 +292,7 @@ public class DefaultAopProxyFactory implements AopProxyFactory, Serializable {
 
 如上，DefaultAopProxyFactory 根据一些条件决定生成什么类型的 AopProxy 实现类对象。生成好 AopProxy 实现类对象后，下面就要为目标 bean 创建代理对象了。这里以 JdkDynamicAopProxy 为例，我们来看一下，该类的 getProxy 方法的逻辑是怎样的。如下：
 
-```
+```java
 public Object getProxy() {
     return getProxy(ClassUtils.getDefaultClassLoader());
 }
@@ -308,7 +314,7 @@ public Object getProxy(ClassLoader classLoader) {
 
 本节，我来分析一下 JDK 动态代理逻辑。对于 JDK 动态代理，代理逻辑封装在 InvocationHandler 接口实现类的 invoke 方法中。JdkDynamicAopProxy 实现了 InvocationHandler 接口，下面我们就来分析一下 JdkDynamicAopProxy 的 invoke 方法。如下：
 
-```
+```java
 public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
     MethodInvocation invocation;
     Object oldProxy = null;
@@ -386,7 +392,7 @@ public Object invoke(Object proxy, Method method, Object[] args) throws Throwabl
 
 所谓的拦截器，顾名思义，是指用于对目标方法的调用进行拦截的一种工具。拦截器的源码比较简单，所以我们直接看源码好了。下面以前置通知拦截器为例，如下：
 
-```
+```java
 public class MethodBeforeAdviceInterceptor implements MethodInterceptor, Serializable {
     
     /** 前置通知 */
@@ -409,7 +415,7 @@ public class MethodBeforeAdviceInterceptor implements MethodInterceptor, Seriali
 
 如上，前置通知的逻辑在目标方法执行前被执行。这里先简单向大家介绍一下拦截器是什么，关于拦截器更多的描述将放在下一节中。本节我们先来看看如何如何获取拦截器，如下：
 
-```
+```java
 public List<Object> getInterceptorsAndDynamicInterceptionAdvice(Method method, Class<?> targetClass) {
     MethodCacheKey cacheKey = new MethodCacheKey(method);
     // 从缓存中获取
@@ -516,7 +522,7 @@ public MethodInterceptor[] getInterceptors(Advisor advisor) throws UnknownAdvice
 
 本节的开始，我们先来说说 ReflectiveMethodInvocation。ReflectiveMethodInvocation 贯穿于拦截器链执行的始终，可以说是核心。该类的 proceed 方法用于启动启动拦截器链，下面我们去看看这个方法的逻辑。
 
-```
+```java
 public class ReflectiveMethodInvocation implements ProxyMethodInvocation {
 
     private int currentInterceptorIndex = -1;
@@ -556,7 +562,7 @@ public class ReflectiveMethodInvocation implements ProxyMethodInvocation {
 
 如上，proceed 根据 currentInterceptorIndex 来确定当前应执行哪个拦截器，并在调用拦截器的 invoke 方法时，将自己作为参数传给该方法。前面的章节中，我们看过了前置拦截器的源码，这里来看一下后置拦截器源码。如下：
 
-```
+```java
 public class AspectJAfterAdvice extends AbstractAspectJAdvice
         implements MethodInterceptor, AfterAdvice, Serializable {
 
@@ -588,7 +594,7 @@ public class AspectJAfterAdvice extends AbstractAspectJAdvice
 
 这边不好理解，假如当前获取到了`before`,`after`,`around`三个`advice`，
 1. 首先第一个获取到的是`after`，他会去执行`after`的`invoke`方法，
-```
+```java
 try {
     // 调用 proceed
     return mi.proceed();
@@ -623,7 +629,7 @@ finally {
 
 ### 执行目标方法
 
-```
+```java
 protected Object invokeJoinpoint() throws Throwable {
     return AopUtils.invokeJoinpointUsingReflection(this.target, this.method, this.arguments);
 }
