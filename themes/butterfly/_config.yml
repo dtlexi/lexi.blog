@@ -381,9 +381,9 @@ tencent_analytics:
 
 # Google Adsense (谷歌廣告)
 google_adsense:
-  enable: false
+  enable: true
   js: https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js
-  client:
+  client: ca-pub-5976623624753961
   enable_page_level_ads: true
 
 # Insert ads manually (手動插入廣告)
