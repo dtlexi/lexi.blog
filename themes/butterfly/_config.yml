@@ -84,7 +84,7 @@ avatar:
   effect: false
 
 # the banner image of home page
-index_img: http://pic1.win4000.com/wallpaper/b/527861a080b8b.jpg
+index_img: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/2.jpg
 
 # if the banner of page not setting,it will show the top_img
 default_top_img: http://pic1.win4000.com/wallpaper/b/527861c64a064.jpg
