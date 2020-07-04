@@ -80,7 +80,7 @@ favicon: /img/favicon.png
 
 # Avatar (頭像)
 avatar:
-  img: https://ss0.bdstatic.com/70cFuHSh_Q1YnxGkpoWK1HF6hhy/it/u=2054942014,3016101982&fm=26&gp=0.jpg
+  img: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/4.jpg
   effect: false
 
 # the banner image of home page
