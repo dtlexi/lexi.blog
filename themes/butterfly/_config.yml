@@ -87,7 +87,7 @@ avatar:
 index_img: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/2.jpg
 
 # if the banner of page not setting,it will show the top_img
-default_top_img: http://pic1.win4000.com/wallpaper/b/527861c64a064.jpg
+default_top_img: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/3.jpg
 
 # the banner image of archive page
 archive_img:
