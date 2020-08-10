@@ -13,640 +13,454 @@ tags:
  - spring 源码分析
 ---
 
-### 引入
 
-SpringAop使用的是`@EnableAspectJAutoProxy`注解，点进去看看源码
-```java
-@Target(ElementType.TYPE)
-@Retention(RetentionPolicy.RUNTIME)
-@Documented
-@Import(AspectJAutoProxyRegistrar.class)
-public @interface EnableAspectJAutoProxy {
-   boolean proxyTargetClass() default false;
+BeanFactoryPostProcessor和BeanPostProcessor这两个接口都是初始化bean时对外暴露的入口之一，和Aware类似。是Spring预先埋好的钩子。弄清楚Spring的各个BeanPostProcess的执行时机和作用有助于我们更好地理解spring的生命周期。同时能更好的方便我们对spring进行扩展。
 
-   boolean exposeProxy() default false;
-}
-```
+Spring在实例化Bean时一共调用了八次后置处理器，下面我们来对他们一一进行分析。
 
-发现`EnableAspectJAutoProxy`注解内部引用了一个`@Import`注解，引入了一个`AspectJAutoProxyRegistrar`类，具体作用详见 Spring @Import.md
-
-我们看一下`AspectJAutoProxyRegistrar`类
-```java
-class AspectJAutoProxyRegistrar implements ImportBeanDefinitionRegistrar {
-
-   /**
-    * Register, escalate, and configure the AspectJ auto proxy creator based on the value
-    * of the @{@link EnableAspectJAutoProxy#proxyTargetClass()} attribute on the importing
-    * {@code @Configuration} class.
-    */
-   @Override
-   public void registerBeanDefinitions(
-      AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
-      AopConfigUtils.registerAspectJAnnotationAutoProxyCreatorIfNecessary(registry);
-
-      AnnotationAttributes enableAspectJAutoProxy =
-            AnnotationConfigUtils.attributesFor(importingClassMetadata, EnableAspectJAutoProxy.class);
-      if (enableAspectJAutoProxy != null) {
-         if (enableAspectJAutoProxy.getBoolean("proxyTargetClass")) {
-            AopConfigUtils.forceAutoProxyCreatorToUseClassProxying(registry);
-         }
-         if (enableAspectJAutoProxy.getBoolean("exposeProxy")) {
-            AopConfigUtils.forceAutoProxyCreatorToExposeProxy(registry);
-         }
-      }
-   }
-
-}
-```
-发现`AopConfigUtils.registerAspectJAnnotationAutoProxyCreatorIfNecessary(registry);`注入了一个`ProxyCreator`,继续跟进
+### 1. 第一次调用后置处理器
+Spring第一次调用后置处理器实在`Spring`实例化`Bean`对象之前。Spring此时将会调用实现了`InstantiationAwareBeanPostProcessors`接口的后置处理器的`postProcessBeforeInstantiation`方法。如果此时返回不为空，那么Spring将会返回当前对象，不会再重新创建对象。并且不会给对象内部属性赋值
 
 ```java
 @Nullable
-public static BeanDefinition registerAspectJAnnotationAutoProxyCreatorIfNecessary(BeanDefinitionRegistry registry) {
-   return registerAspectJAnnotationAutoProxyCreatorIfNecessary(registry, null);
+default Object postProcessBeforeInstantiation(Class<?> beanClass, String beanName) throws BeansException {
+   return null;
 }
 ```
+
+程序员可以实现`InstantiationAwareBeanPostProcessors`接口，来完成一些特定类的初始化工作(但是好像一般不这样做)。
+
+Spring第一次调用后置处理器的源码如下：
+
+```java
+@Override
+protected Object createBean(String beanName, RootBeanDefinition mbd, @Nullable Object[] args)
+      throws BeanCreationException {
+   //...省略部分类容
+   try {
+      // Give BeanPostProcessors a chance to return a proxy instead of the target bean instance.
+
+      // 第一次调用spring后置处理器
+      // InstantiationAwareBeanPostProcessor postProcessBeforeInstantiation
+      // 此时spring还没有开始实例化对象
+      // 程序员可以接管spring的创建对象流程，返回自定义对象（spring建议返回代理对象）
+      Object bean = resolveBeforeInstantiation(beanName, mbdToUse);
+      if (bean != null) {
+         return bean;
+      }
+   }
+   catch (Throwable ex) {
+      throw new BeanCreationException(mbdToUse.getResourceDescription(), beanName,
+            "BeanPostProcessor before instantiation of bean failed", ex);
+   }
+   //...省略部分类容
+}
+```
+```java
+@Nullable
+protected Object resolveBeforeInstantiation(String beanName, RootBeanDefinition mbd) {
+   Object bean = null;
+   if (!Boolean.FALSE.equals(mbd.beforeInstantiationResolved)) {
+      // Make sure bean class is actually resolved at this point.
+
+      /**
+       * mbd.isSynthetic() 判断当前类是否是合成类，合成类指的是
+       * class A{
+       *     class B{
+       *         private B()
+       *         {
+       *
+       *         }
+       *     }
+       *     psvm(){
+       *         B b=new B();
+       *
+       *     }
+       * }
+       * 因为B的构造方法私有化，但是在内的类的外部类中，有可以调用内部类的私有方法，字段等，
+       * 此时可以在A中实例化B
+       * JVM通过构建内外一个类来实现的，此时有三个class文件。而spring的扫描时扫描类文件。
+       * 所以此时要判断是否是合成类
+       *
+       * hasInstantiationAwareBeanPostProcessors()：
+       * 判断当前是否有后置处理器实现了InstantiationAwareBeanPostProcessors，
+       * AspectJAutoProxyCreator就是实现了这个类
+       *
+       * 这边第一次调用了后置处理器
+       */
+      if (!mbd.isSynthetic() && hasInstantiationAwareBeanPostProcessors()) {
+         //获取当前bd对应的Class
+         Class<?> targetType = determineTargetType(beanName, mbd);
+         if (targetType != null) {
+            // 调用InstantiationAwareBeanPostProcessor postProcessBeforeInstantiation方法
+            bean = applyBeanPostProcessorsBeforeInstantiation(targetType, beanName);
+            if (bean != null) {
+               // 调用BeanPostProcessor的postProcessAfterInitialization方法
+               bean = applyBeanPostProcessorsAfterInitialization(bean, beanName);
+            }
+         }
+      }
+      mbd.beforeInstantiationResolved = (bean != null);
+   }
+   return bean;
+}
+```
+
+### 2. 第二次调用后置处理器
+
+Sping第二次调用的是`SmartInstantiationAwareBeanPostProcessor`的`determineCandidateConstructors`方法。Spring第二次调用后置处理器也是在实例化对象之前。
 
 ```java
 @Nullable
-public static BeanDefinition registerAspectJAnnotationAutoProxyCreatorIfNecessary(
-      BeanDefinitionRegistry registry, @Nullable Object source) {
+default Constructor<?>[] determineCandidateConstructors(Class<?> beanClass, String beanName)
+      throws BeansException {
 
-   return registerOrEscalateApcAsRequired(AnnotationAwareAspectJAutoProxyCreator.class, registry, source);
+   return null;
 }
 ```
+Spring提供这个扩展是让后置处理器参与到Spring构造方法的判断中去
+
+这边最主要的实现就是`AutowiredAnnotationBeanPostProcessor`，它是Spring用来推断构造方法的。
+
+Spirng第二次调用后置处理器的源码：
 
 ```java
-private static BeanDefinition registerOrEscalateApcAsRequired(
-      Class<?> cls, BeanDefinitionRegistry registry, @Nullable Object source) {
+protected BeanWrapper createBeanInstance(String beanName, RootBeanDefinition mbd, @Nullable Object[] args) {
+   // ... 省略部分内容
+   // 第二次执行执行后置处理器BeanPostProcessor
+   // 用来确定构造方法，主要逻辑如下
+   // 1. 这边的逻辑是如果存在@Autowired(required=true)的构造方法。直接返回当前构造方法
+   // 2. 如果不存在required=true的构造方法，但是存在required=false的构造方法，返回默认构造方法和@Autowired(required=false)的构造方法
+   // 3. 如果有且只存在一个构造方法，并且当前构造方法的参数>0 那么返回当前构造方法
+   Constructor<?>[] ctors = determineConstructorsFromBeanPostProcessors(beanClass, beanName);
+   // ... 省略部分内容
+}
+```
+```java
+protected Constructor<?>[] determineConstructorsFromBeanPostProcessors(@Nullable Class<?> beanClass, String beanName)
+      throws BeansException {
 
-   Assert.notNull(registry, "BeanDefinitionRegistry must not be null");
-
-   if (registry.containsBeanDefinition(AUTO_PROXY_CREATOR_BEAN_NAME)) {
-      BeanDefinition apcDefinition = registry.getBeanDefinition(AUTO_PROXY_CREATOR_BEAN_NAME);
-      if (!cls.getName().equals(apcDefinition.getBeanClassName())) {
-         int currentPriority = findPriorityForClass(apcDefinition.getBeanClassName());
-         int requiredPriority = findPriorityForClass(cls);
-         if (currentPriority < requiredPriority) {
-            apcDefinition.setBeanClassName(cls.getName());
+   // 调用SmartInstantiationAwareBeanPostProcessor determineCandidateConstructors
+   // 推断构造方法
+   if (beanClass != null && hasInstantiationAwareBeanPostProcessors()) {
+      for (BeanPostProcessor bp : getBeanPostProcessors()) {
+         if (bp instanceof SmartInstantiationAwareBeanPostProcessor) {
+            SmartInstantiationAwareBeanPostProcessor ibp = (SmartInstantiationAwareBeanPostProcessor) bp;
+            Constructor<?>[] ctors = ibp.determineCandidateConstructors(beanClass, beanName);
+            if (ctors != null) {
+               return ctors;
+            }
          }
       }
-      return null;
+   }
+   return null;
+}
+```
+
+### 3. 第三次调用后置处理器
+Spring第三次执行`MergedBeanDefinitionPostProcessor`的`postProcessMergedBeanDefinition`方法，此时`Spring`刚刚实例化完成Bean对象
+Spring不仅有`RootBeanDefinition`和`ChildBeanDefinition`的概念，Spring还有`Merged（合并）`的概念，即合并`root`和`child`的内容，使bd内容完整。
+Spring第三次后置处理器可以简单理解为bd合并完成后（此时bd在之前就已经合并完成，不是此处合并的），此时是一个完整的bd，程序员可以进行相关操作。
+
+```java
+void postProcessMergedBeanDefinition(RootBeanDefinition beanDefinition, Class<?> beanType, String beanName);
+```
+
+这边典型的后置处理器有`CommonAnnotationBeanPostProcessor`和`AutowiredAnnotationBeanPostProcessor`。
+其中`CommonAnnotationBeanPostProcessor`是找到所有`@Resource`注解，而`AutowiredAnnotationBeanPostProcessor`是找到所有`@Autowired`注解的
+
+Spring第三次调用后置处理器源码：
+
+```java
+protected Object doCreateBean(final String beanName, final RootBeanDefinition mbd, final @Nullable Object[] args)
+      throws BeanCreationException {
+
+   //...删除相关代码
+   // 第三次调用后置处理器BeanPostProcessor
+   synchronized (mbd.postProcessingLock) {
+      if (!mbd.postProcessed) {
+         try {
+            // 调用MergedBeanDefinitionPostProcessor的postProcessMergeBeanDefinition()
+            // 这边典型的有CommonAnnotationBeanPostProcessor和AutowiredAnnotationBeanPostProcessor
+            // CommonAnnotationBeanPostProcessor 是找到所有@Resource注解
+            // AutowiredAnnotationBeanPostProcessor 找到所有@Autowired注解
+            applyMergedBeanDefinitionPostProcessors(mbd, beanType, beanName);
+         }
+         catch (Throwable ex) {
+            throw new BeanCreationException(mbd.getResourceDescription(), beanName,
+                  "Post-processing of merged bean definition failed", ex);
+         }
+         mbd.postProcessed = true;
+      }
+   }
+   //...删除相关代码
+}
+```
+
+```java
+protected void applyMergedBeanDefinitionPostProcessors(RootBeanDefinition mbd, Class<?> beanType, String beanName) {
+   for (BeanPostProcessor bp : getBeanPostProcessors()) {
+      if (bp instanceof MergedBeanDefinitionPostProcessor) {
+         MergedBeanDefinitionPostProcessor bdp = (MergedBeanDefinitionPostProcessor) bp;
+         bdp.postProcessMergedBeanDefinition(mbd, beanType, beanName);
+      }
+   }
+}
+```
+
+### 4. 第四次调用后置处理器
+紧接着第三次后置处理器之后是Spring第四次调用后置处理器。
+
+当然，此处不应该说调用后置处理器，因为此处没有调用后置处理器。此处只是将后置处理器封装lamb表达式封装到一个map中去了，这个map就是spring解决循环依赖中的`singleFactory`。
+
+Spring将在解决循环依赖的`getSingle`方法中调用此后置处理器。
+
+第四次循环依赖的作用是，当我们在对bean对象本身就行修改时（参考aop代理）。此时创建的对象和给其他对象属性赋值的可能是不同的对象。那么此时就需要提前拿到他的代理后的对象。
+
+这边也是spring 解决循环依赖同时又能兼顾aop的核心，将在Spring 循环依赖中详细介绍。
+
+Spring在此调用的是`SmartInstantiationAwareBeanPostProcessor`的`getEarlyBeanReference`方法
+
+```java
+default Object getEarlyBeanReference(Object bean, String beanName) throws BeansException {
+   return bean;
+}
+```
+
+Spring第四次调用后置处理器源码：
+```java
+protected Object doCreateBean(final String beanName, final RootBeanDefinition mbd, final @Nullable Object[] args)
+      throws BeanCreationException {
+   //...省略部代码
+   // this.allowCircularReferences是否允许循环依赖，可以通过setAllowCircularReferences()设置
+   // 这边主要是检查当前是否是单例对象，是否允许循环依赖
+   boolean earlySingletonExposure = (mbd.isSingleton() && this.allowCircularReferences &&
+         isSingletonCurrentlyInCreation(beanName));
+   if (earlySingletonExposure) {
+      if (logger.isTraceEnabled()) {
+         logger.trace("Eagerly caching bean '" + beanName +
+               "' to allow for resolving potential circular references");
+      }
+      // 第四次调用后置处理器，在getEarlyBeanReference方法里面
+      // 如果允许调用循环引用，这边会往beanFactory的singletonFactories put lamb表达式
+      // () -> getEarlyBeanReference(beanName, mbd, bean)
+      // getEarlyBeanReference 是提前调用aop的方法产生代理对象
+      // 这边也是spring aop 解决循环依赖同时又能兼顾aop的核心
+      addSingletonFactory(beanName, () -> getEarlyBeanReference(beanName, mbd, bean));
+   }
+   //...省略无关代码
+}
+```
+
+```java
+protected Object getEarlyBeanReference(String beanName, RootBeanDefinition mbd, Object bean) {
+   Object exposedObject = bean;
+   if (!mbd.isSynthetic() && hasInstantiationAwareBeanPostProcessors()) {
+      for (BeanPostProcessor bp : getBeanPostProcessors()) {
+         if (bp instanceof SmartInstantiationAwareBeanPostProcessor) {
+            SmartInstantiationAwareBeanPostProcessor ibp = (SmartInstantiationAwareBeanPostProcessor) bp;
+            exposedObject = ibp.getEarlyBeanReference(exposedObject, beanName);
+         }
+      }
+   }
+   return exposedObject;
+}
+```
+
+
+
+### 5. 第五次调用后置处理器
+Spring的第五次后置处理器调用发生在Spring填充属性之前。Spring此时会调用`InstantiationAwareBeanPostProcessor`的`postProcessAfterInstantiation`方法。
+
+```java
+default boolean postProcessAfterInstantiation(Object bean, String beanName) throws BeansException {
+   return true;
+}
+```
+
+Spring提供当前后置处理器的目的有俩个：
+1. 程序员可以取消某些bean的属性赋值
+2. 程序员可以手动给某些bean的属性赋值
+
+Sping第五次调用后置处理器源码：
+
+```java
+protected void populateBean(String beanName, RootBeanDefinition mbd, @Nullable BeanWrapper bw) {
+   // ...删除无关代码
+   // 执行后置处理器InstantiationAwareBeanPostProcessor的postProcessAfterInstantiation方法
+   // 如果postProcessAfterInstantiation方法返回false，那么将直接退出该方法，不会执行下面的赋值操作
+   // 这边spring默认的后置处理器都是直接返回true
+   // 这边应该是spring开发给程序员使用的，
+   // 控制 autowired by type 但是有的又不想注入
+   // spring提供此后置处理器的目的还有一个，让程序员自己给bean赋值，然后返回false,取消spring自动赋值
+   if (!mbd.isSynthetic() && hasInstantiationAwareBeanPostProcessors()) {
+      for (BeanPostProcessor bp : getBeanPostProcessors()) {
+         if (bp instanceof InstantiationAwareBeanPostProcessor) {
+            // 执行后置处理器的 postProcessAfterInstantiation
+            // 这是spring第五次调用后置处理器
+            InstantiationAwareBeanPostProcessor ibp = (InstantiationAwareBeanPostProcessor) bp;
+            if (!ibp.postProcessAfterInstantiation(bw.getWrappedInstance(), beanName)) {
+               return;
+            }
+         }
+      }
+   }
+   // ...删除无关代码
+}
+```
+
+
+
+
+### 6. 第六次调用后置处理器
+
+Spring第六次后置处理器调用是发生在Spring给bean属性赋值时。Spring此时会调用`InstantiationAwareBeanPostProcessor`的`postProcessProperties`方法,这边还调用了`InstantiationAwareBeanPostProcessor`的`postProcessPropertyValues`，只不过这个方法Spring已经废弃掉了。
+
+```java
+@Nullable
+default PropertyValues postProcessProperties(PropertyValues pvs, Object bean, String beanName)
+      throws BeansException {
+
+   return null;
+}
+```
+
+Spirng此时调用后置处理器是想让程序员参与到spring bean的属性注入中去。
+
+这边比较典型的就是`CommonAnnotationBeanPostProcessor`和`AutowiredAnnotationBeanPostProcessor`，前者完成了`@Resource`注解标注的属性的注入。后者完成了`Autowired`标注的属性的注入
+
+Spring第六次后置处理器的调用源码如下：
+
+```java
+protected void populateBean(String beanName, RootBeanDefinition mbd, @Nullable BeanWrapper bw) {
+   //... 删除无关代码
+   PropertyDescriptor[] filteredPds = null;
+   if (hasInstAwareBpps) {
+      // spring第六次调用后置处理器
+      // 调用 InstantiationAwareBeanPostProcessor postProcessProperties 完成属性注入
+      // 其中@CommonAnnotationBeanPostProcessor 完成@Resource属性注入
+      // @AutowiredAnnotationBeanPostProcessor 完成@Autowired属性注入
+      for (BeanPostProcessor bp : getBeanPostProcessors()) {
+         if (bp instanceof InstantiationAwareBeanPostProcessor) {
+            InstantiationAwareBeanPostProcessor ibp = (InstantiationAwareBeanPostProcessor) bp;
+            // 执行postProcessProperties
+            PropertyValues pvsToUse = ibp.postProcessProperties(pvs, bw.getWrappedInstance(), beanName);
+            if (pvsToUse == null) {
+               if (filteredPds == null) {
+                  filteredPds = filterPropertyDescriptorsForDependencyCheck(bw, mbd.allowCaching);
+               }
+               // 执行postProcessPropertyValues，但是Spring已经废弃了此方法
+               pvsToUse = ibp.postProcessPropertyValues(pvs, filteredPds, bw.getWrappedInstance(), beanName);
+               if (pvsToUse == null) {
+                  return;
+               }
+            }
+            pvs = pvsToUse;
+         }
+      }
+   }
+   //... 删除无关代码
+}
+```
+
+### 7. 第七次调用后置处理器
+Spring第八次后置处理器是在Spring完成了属性注入，并且完成了部分Aware方法的调用后执行的，这边为什么要说部分，因为有的Aware是在后置处理器中调用的
+
+Spring此时调用的是`BeanPostProcessor`的`postProcessBeforeInitialization`方法,此时还没有调用bean的生命周期函数方法。
+
+```java
+@Nullable
+default Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+   return bean;
+}
+```
+
+spring提供当前后置处理器的目的是让程序员参与到spring的初始化中去。
+
+这边比较典型的实现类是`ApplicationContextAwareProcessor`和`InitDestroyAnnotationBeanPostProcessor`。其中`ApplicationContextAwareProcessor`负责处理其他Aware接口方法的调用。而`InitDestroyAnnotationBeanPostProcessor`负责处理`@PostConstruct`注解。
+
+Spring第七次调用后置处理器的源码
+```java
+protected Object initializeBean(final String beanName, final Object bean, @Nullable RootBeanDefinition mbd) {
+   // ...删除部分源码
+   // 第七次后置处理器的调用
+   // 执行postProcessBeforeInitialization
+   // ApplicationContextAwareProcessor 在这边处理各种Aware
+   // InitDestroyAnnotationBeanPostProcessor 在这边处理@PostConstruct注解
+   Object wrappedBean = bean;
+   if (mbd == null || !mbd.isSynthetic()) {
+      wrappedBean = applyBeanPostProcessorsBeforeInitialization(wrappedBean, beanName);
+   }
+   // ...删除部分源码
+}
+```
+```java
+@Override
+public Object applyBeanPostProcessorsAfterInitialization(Object existingBean, String beanName)
+      throws BeansException {
+
+   Object result = existingBean;
+   for (BeanPostProcessor processor : getBeanPostProcessors()) {
+      Object current = processor.postProcessAfterInitialization(result, beanName);
+      if (current == null) {
+         return result;
+      }
+      result = current;
+   }
+   return result;
+}
+```
+
+### 8. 第八次调用后置处理器
+
+Spring第八次调用后置处理器是发生在Spring完全初始化完Bean对象后，执行的。这也是Sprig最后一次调用后置处理器。
+
+Spring此时会调用`BeanPostProcessor`的`postProcessAfterInitialization`方法
+
+```java
+@Nullable
+default Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+   return bean;
+}
+```
+
+Spring提供当前后置处理器是想让Spirng对完成初始化的对象进行修改，比如代理。
+
+这边比较典型的是Sprng Aop的实现。
+
+Spring第八次调用后置处理器代码实现：
+
+```java
+protected Object initializeBean(final String beanName, final Object bean, @Nullable RootBeanDefinition mbd) {
+   // ... 删除部分无关代码
+   // 第八次后置处理器的调用
+   // 执行postProcessAfterInitialization
+   // spring aop就是在这边添加代理的
+   if (mbd == null || !mbd.isSynthetic()) {
+      wrappedBean = applyBeanPostProcessorsAfterInitialization(wrappedBean, beanName);
    }
 
-   RootBeanDefinition beanDefinition = new RootBeanDefinition(cls);
-   beanDefinition.setSource(source);
-   beanDefinition.getPropertyValues().add("order", Ordered.HIGHEST_PRECEDENCE);
-   beanDefinition.setRole(BeanDefinition.ROLE_INFRASTRUCTURE);
-   registry.registerBeanDefinition(AUTO_PROXY_CREATOR_BEAN_NAME, beanDefinition);
-   return beanDefinition;
+   return wrappedBean;
 }
 ```
 
-通过上面的代码我们发现Import主要是注册了一个`AnnotationAwareAspectJAutoProxyCreator`,通过查看该方法的继承关系，我们发现该方法继承自`AbstractAutoProxyCreator`,最终继承自`BeanPostProcesser`,结合`BeanPostProcesser`的知识，我们猜想SpringAop是在`BeanPostProcesser`的`postProcessAfterInitialization`中对目标类完成改造的。我们在`AbstractAutoProxyCreator`类中找到了该方法
-
-### BeanPostProcessor 
-
-BeanPostProcessor 接口:
 ```java
-public interface BeanPostProcessor {
+public Object applyBeanPostProcessorsAfterInitialization(Object existingBean, String beanName)
+      throws BeansException {
 
-   @Nullable
-   default Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
-      return bean;
+   Object result = existingBean;
+   for (BeanPostProcessor processor : getBeanPostProcessors()) {
+      Object current = processor.postProcessAfterInitialization(result, beanName);
+      if (current == null) {
+         return result;
+      }
+      result = current;
    }
-
-   @Nullable
-   default Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
-      return bean;
-   }
-
+   return result;
 }
 ```
 
-AbstractAutoProxyCreator抽象类简化：
-```java
-public abstract class AbstractAutoProxyCreator extends ProxyProcessorSupport
-        implements SmartInstantiationAwareBeanPostProcessor, BeanFactoryAware {
-    
-    @Override
-    /** bean 初始化后置处理方法 */
-    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
-        if (bean != null) {
-            Object cacheKey = getCacheKey(bean.getClass(), beanName);
-            if (!this.earlyProxyReferences.contains(cacheKey)) {
-                // 如果需要，为 bean 生成代理对象
-                return wrapIfNecessary(bean, beanName, cacheKey);
-            }
-        }
-        return bean;
-    }
-    
-    protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) {
-        if (beanName != null && this.targetSourcedBeans.contains(beanName)) {
-            return bean;
-        }
-         // 判断是否不应该代理这个bean
-        if (Boolean.FALSE.equals(this.advisedBeans.get(cacheKey))) {
-            return bean;
-        }
+下面我们来对Spring的生命周期做个简单的总结：
 
-        /*
-         * 如果是基础设施类（Pointcut、Advice、Advisor 等接口的实现类），或是应该跳过的类，
-         * 则不应该生成代理，此时直接返回 bean
-         */ 
-        if (isInfrastructureClass(bean.getClass()) || shouldSkip(bean.getClass(), beanName)) {
-            // 将 <cacheKey, FALSE> 键值对放入缓存中，供上面的 if 分支使用
-            this.advisedBeans.put(cacheKey, Boolean.FALSE);
-            return bean;
-        }
+![](https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/beanPostProcessor.png)
 
-        // 为目标 bean 查找合适的通知器
-        Object[] specificInterceptors = getAdvicesAndAdvisorsForBean(bean.getClass(), beanName, null);
-        /*
-         * 若 specificInterceptors != null，即 specificInterceptors != DO_NOT_PROXY，
-         * 则为 bean 生成代理对象，否则直接返回 bean
-         */ 
-        if (specificInterceptors != DO_NOT_PROXY) {
-            this.advisedBeans.put(cacheKey, Boolean.TRUE);
-            // 创建代理
-            Object proxy = createProxy(
-                    bean.getClass(), beanName, specificInterceptors, new SingletonTargetSource(bean));
-            this.proxyTypes.put(cacheKey, proxy.getClass());
-            /*
-             * 返回代理对象，此时 IOC 容器输入 bean，得到 proxy。此时，
-             * beanName 对应的 bean 是代理对象，而非原始的 bean
-             */ 
-            return proxy;
-        }
-
-        this.advisedBeans.put(cacheKey, Boolean.FALSE);
-        // specificInterceptors = null，直接返回 bean
-        return bean;
-    }
-}
-```
-以上就是 Spring AOP 创建代理对象的入口方法分析，过程比较简单，这里简单总结一下：
-1. 若 bean 是 AOP 基础设施类型，则直接返回
-2. 为 bean 查找合适的通知器
-3. 如果通知器数组不为空，则为 bean 生成代理对象，并返回该对象
-4. 若数组为空，则返回原始 bean
-
-### 创建代理对象
-
-通过上面的代码我们可以知道代理对象是通过`createProxy`方法创建的，那我们就看看这个方法
-```java
-protected Object createProxy(
-        Class<?> beanClass, String beanName, Object[] specificInterceptors, TargetSource targetSource) {
-
-    if (this.beanFactory instanceof ConfigurableListableBeanFactory) {
-        AutoProxyUtils.exposeTargetClass((ConfigurableListableBeanFactory) this.beanFactory, beanName, beanClass);
-    }
-
-    ProxyFactory proxyFactory = new ProxyFactory();
-    proxyFactory.copyFrom(this);
-
-    /*
-     * 默认配置下，或用户显式配置 proxy-target-class = "false" 时，
-     * 这里的 proxyFactory.isProxyTargetClass() 也为 false
-     */
-    if (!proxyFactory.isProxyTargetClass()) {
-        if (shouldProxyTargetClass(beanClass, beanName)) {
-            proxyFactory.setProxyTargetClass(true);
-        }
-        else {
-            /*
-             * 检测 beanClass 是否实现了接口，若未实现，则将 
-             * proxyFactory 的成员变量 proxyTargetClass 设为 true
-             */ 
-            evaluateProxyInterfaces(beanClass, proxyFactory);
-        }
-    }
-
-    // specificInterceptors 中若包含有 Advice，此处将 Advice 转为 Advisor
-    Advisor[] advisors = buildAdvisors(beanName, specificInterceptors);
-    proxyFactory.addAdvisors(advisors);
-    proxyFactory.setTargetSource(targetSource);
-    customizeProxyFactory(proxyFactory);
-
-    proxyFactory.setFrozen(this.freezeProxy);
-    if (advisorsPreFiltered()) {
-        proxyFactory.setPreFiltered(true);
-    }
-
-    // 创建代理
-    return proxyFactory.getProxy(getProxyClassLoader());
-}
-
-public Object getProxy(ClassLoader classLoader) {
-    // 先创建 AopProxy 实现类对象，然后再调用 getProxy 为目标 bean 创建代理对象
-    return createAopProxy().getProxy(classLoader);
-}
-```
-
-getProxy 这里有两个方法调用，一个是调用 createAopProxy 创建 AopProxy 实现类对象，然后再调用 AopProxy 实现类对象中的 getProxy 创建代理对象。这里我们先来看一下创建 AopProxy 实现类对象的过程，如下：
-
-```java
-protected final synchronized AopProxy createAopProxy() {
-    if (!this.active) {
-        activate();
-    }
-    return getAopProxyFactory().createAopProxy(this);
-}
-
-public class DefaultAopProxyFactory implements AopProxyFactory, Serializable {
-
-    @Override
-    public AopProxy createAopProxy(AdvisedSupport config) throws AopConfigException {
-        /*
-         * 下面的三个条件简单分析一下：
-         *
-         *   条件1：config.isOptimize() - 是否需要优化，这个属性没怎么用过，
-         *         细节我不是很清楚
-         *   条件2：config.isProxyTargetClass() - 检测 proxyTargetClass 的值，
-         *         前面的代码会设置这个值
-         *   条件3：hasNoUserSuppliedProxyInterfaces(config) 
-         *         - 目标 bean 是否实现了接口
-         */
-        if (config.isOptimize() || config.isProxyTargetClass() || hasNoUserSuppliedProxyInterfaces(config)) {
-            Class<?> targetClass = config.getTargetClass();
-            if (targetClass == null) {
-                throw new AopConfigException("TargetSource cannot determine target class: " +
-                        "Either an interface or a target is required for proxy creation.");
-            }
-            if (targetClass.isInterface() || Proxy.isProxyClass(targetClass)) {
-                return new JdkDynamicAopProxy(config);
-            }
-            // 创建 CGLIB 代理，ObjenesisCglibAopProxy 继承自 CglibAopProxy
-            return new ObjenesisCglibAopProxy(config);
-        }
-        else {
-            // 创建 JDK 动态代理
-            return new JdkDynamicAopProxy(config);
-        }
-    }
-}
-```
-其中`AopProxy `的类结构如下
-
-
-
-如上，DefaultAopProxyFactory 根据一些条件决定生成什么类型的 AopProxy 实现类对象。生成好 AopProxy 实现类对象后，下面就要为目标 bean 创建代理对象了。这里以 JdkDynamicAopProxy 为例，我们来看一下，该类的 getProxy 方法的逻辑是怎样的。如下：
-
-```java
-public Object getProxy() {
-    return getProxy(ClassUtils.getDefaultClassLoader());
-}
-
-public Object getProxy(ClassLoader classLoader) {
-    if (logger.isDebugEnabled()) {
-        logger.debug("Creating JDK dynamic proxy: target source is " + this.advised.getTargetSource());
-    }
-    Class<?>[] proxiedInterfaces = AopProxyUtils.completeProxiedInterfaces(this.advised, true);
-    findDefinedEqualsAndHashCodeMethods(proxiedInterfaces);
-    
-    // 调用 newProxyInstance 创建代理对象
-    return Proxy.newProxyInstance(classLoader, proxiedInterfaces, this);
-}
-```
-
-如上，请把目光移至最后一行有效代码上，会发现 JdkDynamicAopProxy 最终调用 Proxy.newProxyInstance 方法创建代理对象。
-
-
-本节，我来分析一下 JDK 动态代理逻辑。对于 JDK 动态代理，代理逻辑封装在 InvocationHandler 接口实现类的 invoke 方法中。JdkDynamicAopProxy 实现了 InvocationHandler 接口，下面我们就来分析一下 JdkDynamicAopProxy 的 invoke 方法。如下：
-
-```java
-public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-    MethodInvocation invocation;
-    Object oldProxy = null;
-    boolean setProxyContext = false;
-
-    TargetSource targetSource = this.advised.targetSource;
-    Class<?> targetClass = null;
-    Object target = null;
-
-    try {
-        // 省略部分代码
-        Object retVal;
-
-        // 如果 expose-proxy 属性为 true，则暴露代理对象
-        if (this.advised.exposeProxy) {
-            // 向 AopContext 中设置代理对象
-            oldProxy = AopContext.setCurrentProxy(proxy);
-            setProxyContext = true;
-        }
-
-        // 获取适合当前方法的拦截器
-        List<Object> chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);
-
-        // 如果拦截器链为空，则直接执行目标方法
-        if (chain.isEmpty()) {
-            Object[] argsToUse = AopProxyUtils.adaptArgumentsIfNecessary(method, args);
-            // 通过反射执行目标方法
-            retVal = AopUtils.invokeJoinpointUsingReflection(target, method, argsToUse);
-        }
-        else {
-            // 创建一个方法调用器，并将拦截器链传入其中
-            invocation = new ReflectiveMethodInvocation(proxy, target, method, args, targetClass, chain);
-            // 执行拦截器链
-            retVal = invocation.proceed();
-        }
-
-        // 获取方法返回值类型
-        Class<?> returnType = method.getReturnType();
-        if (retVal != null && retVal == target &&
-                returnType != Object.class && returnType.isInstance(proxy) &&
-                !RawTargetAccess.class.isAssignableFrom(method.getDeclaringClass())) {
-            // 如果方法返回值为 this，即 return this; 则将代理对象 proxy 赋值给 retVal 
-            retVal = proxy;
-        }
-        // 如果返回值类型为基础类型，比如 int，long 等，当返回值为 null，抛出异常
-        else if (retVal == null && returnType != Void.TYPE && returnType.isPrimitive()) {
-            throw new AopInvocationException(
-                    "Null return value from advice does not match primitive return type for: " + method);
-        }
-        return retVal;
-    }
-    finally {
-        if (target != null && !targetSource.isStatic()) {
-            targetSource.releaseTarget(target);
-        }
-        if (setProxyContext) {
-            AopContext.setCurrentProxy(oldProxy);
-        }
-    }
-}
-```
-如上，上面的代码我做了比较详细的注释。下面我们来总结一下 invoke 方法的执行流程，如下：
-
-1. 检测 expose-proxy 是否为 true，若为 true，则暴露代理对象
-2. 获取适合当前方法的拦截器
-3. 如果拦截器链为空，则直接通过反射执行目标方法
-4. 若拦截器链不为空，则创建方法调用 ReflectiveMethodInvocation 对象
-5. 调用 ReflectiveMethodInvocation 对象的 proceed() 方法启动拦截器链
-6. 处理返回值，并返回该值
-
-在以上6步中，我们重点关注第2步和第5步中的逻辑。第2步用于获取拦截器链，第5步则是启动拦截器链。下面先来分析获取拦截器链的过程。
-
-
-### 获取所有的拦截器
-
-所谓的拦截器，顾名思义，是指用于对目标方法的调用进行拦截的一种工具。拦截器的源码比较简单，所以我们直接看源码好了。下面以前置通知拦截器为例，如下：
-
-```java
-public class MethodBeforeAdviceInterceptor implements MethodInterceptor, Serializable {
-    
-    /** 前置通知 */
-    private MethodBeforeAdvice advice;
-
-    public MethodBeforeAdviceInterceptor(MethodBeforeAdvice advice) {
-        Assert.notNull(advice, "Advice must not be null");
-        this.advice = advice;
-    }
-
-    @Override
-    public Object invoke(MethodInvocation mi) throws Throwable {
-        // 执行前置通知逻辑
-        this.advice.before(mi.getMethod(), mi.getArguments(), mi.getThis());
-        // 通过 MethodInvocation 调用下一个拦截器，若所有拦截器均执行完，则调用目标方法
-        return mi.proceed();
-    }
-}
-```
-
-如上，前置通知的逻辑在目标方法执行前被执行。这里先简单向大家介绍一下拦截器是什么，关于拦截器更多的描述将放在下一节中。本节我们先来看看如何如何获取拦截器，如下：
-
-```java
-public List<Object> getInterceptorsAndDynamicInterceptionAdvice(Method method, Class<?> targetClass) {
-    MethodCacheKey cacheKey = new MethodCacheKey(method);
-    // 从缓存中获取
-    List<Object> cached = this.methodCache.get(cacheKey);
-    // 缓存未命中，则进行下一步处理
-    if (cached == null) {
-        // 获取所有的拦截器
-        cached = this.advisorChainFactory.getInterceptorsAndDynamicInterceptionAdvice(
-                this, method, targetClass);
-        // 存入缓存
-        this.methodCache.put(cacheKey, cached);
-    }
-    return cached;
-}
-
-public List<Object> getInterceptorsAndDynamicInterceptionAdvice(
-        Advised config, Method method, Class<?> targetClass) {
-
-    List<Object> interceptorList = new ArrayList<Object>(config.getAdvisors().length);
-    Class<?> actualClass = (targetClass != null ? targetClass : method.getDeclaringClass());
-    boolean hasIntroductions = hasMatchingIntroductions(config, actualClass);
-    // registry 为 DefaultAdvisorAdapterRegistry 类型
-    AdvisorAdapterRegistry registry = GlobalAdvisorAdapterRegistry.getInstance();
-
-    // 遍历通知器列表
-    for (Advisor advisor : config.getAdvisors()) {
-        if (advisor instanceof PointcutAdvisor) {
-            PointcutAdvisor pointcutAdvisor = (PointcutAdvisor) advisor;
-            /*
-             * 调用 ClassFilter 对 bean 类型进行匹配，无法匹配则说明当前通知器
-             * 不适合应用在当前 bean 上
-             */
-            if (config.isPreFiltered() || pointcutAdvisor.getPointcut().getClassFilter().matches(actualClass)) {
-                // 将 advisor 中的 advice 转成相应的拦截器
-                MethodInterceptor[] interceptors = registry.getInterceptors(advisor);
-                MethodMatcher mm = pointcutAdvisor.getPointcut().getMethodMatcher();
-                // 通过方法匹配器对目标方法进行匹配
-                if (MethodMatchers.matches(mm, method, actualClass, hasIntroductions)) {
-                    // 若 isRuntime 返回 true，则表明 MethodMatcher 要在运行时做一些检测
-                    if (mm.isRuntime()) {
-                        for (MethodInterceptor interceptor : interceptors) {
-                            interceptorList.add(new InterceptorAndDynamicMethodMatcher(interceptor, mm));
-                        }
-                    }
-                    else {
-                        interceptorList.addAll(Arrays.asList(interceptors));
-                    }
-                }
-            }
-        }
-        else if (advisor instanceof IntroductionAdvisor) {
-            IntroductionAdvisor ia = (IntroductionAdvisor) advisor;
-            // IntroductionAdvisor 类型的通知器，仅需进行类级别的匹配即可
-            if (config.isPreFiltered() || ia.getClassFilter().matches(actualClass)) {
-                Interceptor[] interceptors = registry.getInterceptors(advisor);
-                interceptorList.addAll(Arrays.asList(interceptors));
-            }
-        }
-        else {
-            Interceptor[] interceptors = registry.getInterceptors(advisor);
-            interceptorList.addAll(Arrays.asList(interceptors));
-        }
-    }
-
-    return interceptorList;
-}
-
-public MethodInterceptor[] getInterceptors(Advisor advisor) throws UnknownAdviceTypeException {
-    List<MethodInterceptor> interceptors = new ArrayList<MethodInterceptor>(3);
-    Advice advice = advisor.getAdvice();
-    /*
-     * 若 advice 是 MethodInterceptor 类型的，直接添加到 interceptors 中即可。
-     * 比如 AspectJAfterAdvice 就实现了 MethodInterceptor 接口
-     */
-    if (advice instanceof MethodInterceptor) {
-        interceptors.add((MethodInterceptor) advice);
-    }
-
-    /*
-     * 对于 AspectJMethodBeforeAdvice 等类型的通知，由于没有实现 MethodInterceptor 
-     * 接口，所以这里需要通过适配器进行转换
-     */ 
-    for (AdvisorAdapter adapter : this.adapters) {
-        if (adapter.supportsAdvice(advice)) {
-            interceptors.add(adapter.getInterceptor(advisor));
-        }
-    }
-    if (interceptors.isEmpty()) {
-        throw new UnknownAdviceTypeException(advisor.getAdvice());
-    }
-    return interceptors.toArray(new MethodInterceptor[interceptors.size()]);
-}
-```
-以上就是获取拦截器的过程，代码有点长，不过好在逻辑不是很复杂。这里简单总结一下以上源码的执行过程，如下：
-
-1. 从缓存中获取当前方法的拦截器链
-2. 若缓存未命中，则调用 getInterceptorsAndDynamicInterceptionAdvice 获取拦截器链
-3. 遍历通知器列表
-4. 对于 PointcutAdvisor 类型的通知器，这里要调用通知器所持有的切点（Pointcut）对类和方法进行匹配，匹配成功说明应向当前方法织入通知逻辑
-5. 调用 getInterceptors 方法对非 MethodInterceptor 类型的通知进行转换
-6. 返回拦截器数组，并在随后存入缓存中
-
-### 执行拦截器链
-
-本节的开始，我们先来说说 ReflectiveMethodInvocation。ReflectiveMethodInvocation 贯穿于拦截器链执行的始终，可以说是核心。该类的 proceed 方法用于启动启动拦截器链，下面我们去看看这个方法的逻辑。
-
-```java
-public class ReflectiveMethodInvocation implements ProxyMethodInvocation {
-
-    private int currentInterceptorIndex = -1;
-
-    public Object proceed() throws Throwable {
-        // 拦截器链中的最后一个拦截器执行完后，即可执行目标方法
-        if (this.currentInterceptorIndex == this.interceptorsAndDynamicMethodMatchers.size() - 1) {
-            // 执行目标方法
-            return invokeJoinpoint();
-        }
-
-        Object interceptorOrInterceptionAdvice =
-                this.interceptorsAndDynamicMethodMatchers.get(++this.currentInterceptorIndex);
-        if (interceptorOrInterceptionAdvice instanceof InterceptorAndDynamicMethodMatcher) {
-            InterceptorAndDynamicMethodMatcher dm =
-                    (InterceptorAndDynamicMethodMatcher) interceptorOrInterceptionAdvice;
-            /*
-             * 调用具有三个参数（3-args）的 matches 方法动态匹配目标方法，
-             * 两个参数（2-args）的 matches 方法用于静态匹配
-             */
-            if (dm.methodMatcher.matches(this.method, this.targetClass, this.arguments)) {
-                // 调用拦截器逻辑
-                return dm.interceptor.invoke(this);
-            }
-            else {
-                // 如果匹配失败，则忽略当前的拦截器
-                return proceed();
-            }
-        }
-        else {
-            // 调用拦截器逻辑，并传递 ReflectiveMethodInvocation 对象
-            return ((MethodInterceptor) interceptorOrInterceptionAdvice).invoke(this);
-        }
-    }
-}
-```
-
-如上，proceed 根据 currentInterceptorIndex 来确定当前应执行哪个拦截器，并在调用拦截器的 invoke 方法时，将自己作为参数传给该方法。前面的章节中，我们看过了前置拦截器的源码，这里来看一下后置拦截器源码。如下：
-
-```java
-public class AspectJAfterAdvice extends AbstractAspectJAdvice
-        implements MethodInterceptor, AfterAdvice, Serializable {
-
-    public AspectJAfterAdvice(
-            Method aspectJBeforeAdviceMethod, AspectJExpressionPointcut pointcut, AspectInstanceFactory aif) {
-
-        super(aspectJBeforeAdviceMethod, pointcut, aif);
-    }
-
-
-    @Override
-    public Object invoke(MethodInvocation mi) throws Throwable {
-        try {
-            // 调用 proceed
-            return mi.proceed();
-        }
-        finally {
-            // 调用后置通知逻辑
-            invokeAdviceMethod(getJoinPointMatch(), null, null);
-        }
-    }
-
-    //...
-}
-```
-如上，由于后置通知需要在目标方法返回后执行，所以 AspectJAfterAdvice 先调用 mi.proceed() 执行下一个拦截器逻辑，等下一个拦截器返回后，再执行后置通知逻辑。如果大家不太理解的话，先看个图。这里假设目标方法 method 在执行前，需要执行两个前置通知和一个后置通知。下面我们看一下由三个拦截器组成的拦截器链是如何执行的，如下：
-
-
-
-这边不好理解，假如当前获取到了`before`,`after`,`around`三个`advice`，
-1. 首先第一个获取到的是`after`，他会去执行`after`的`invoke`方法，
-```java
-try {
-    // 调用 proceed
-    return mi.proceed();
-}
-finally {
-    // 调用后置通知逻辑
-    invokeAdviceMethod(getJoinPointMatch(), null, null);
-}
-```
-他会先回调`processd`方法，最后在finally中执行`after`的切入方法，这个方式是执行链执行后完成
-2. 第一次拿到的是before
-他会在执行before的通知方法，在执行processed方法
-3. 拿到around
-
-这边得细品
-
-获取到的拦截器是有顺序的
-1. AfterThrowing
-2. AfterReturn
-3. After
-4. Around
-5. Before
-
-所以执行顺序是
-1. AroundBefore
-2. Before
-3. 目标方法
-4. ArdoudAfter
-5. After
-6. AfterReturn
-7. AfterThrowing
-
-### 执行目标方法
-
-```java
-protected Object invokeJoinpoint() throws Throwable {
-    return AopUtils.invokeJoinpointUsingReflection(this.target, this.method, this.arguments);
-}
-
-public abstract class AopUtils {
-    public static Object invokeJoinpointUsingReflection(Object target, Method method, Object[] args)
-            throws Throwable {
-
-        try {
-            ReflectionUtils.makeAccessible(method);
-            // 通过反射执行目标方法
-            return method.invoke(target, args);
-        }
-        catch (InvocationTargetException ex) {...}
-        catch (IllegalArgumentException ex) {...}
-        catch (IllegalAccessException ex) {...}
-    }
-}
-```
