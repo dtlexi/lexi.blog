@@ -1,7 +1,7 @@
 ---
 title: Spring源码分析-BeanFactoryPostProcessor
 date: 2020-06-30
-cover: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/10.jpg
+cover: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/2.jpg
 top_img: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/big5.jpeg
 categories:
  - java
