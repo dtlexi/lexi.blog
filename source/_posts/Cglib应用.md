@@ -2,7 +2,7 @@
 title: Spring扩展之CGLib应用
 date: 2020-08-18 00:00:00
 cover: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/17.jpg
-top_img: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/18.jpeg
+top_img: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/18.jpg
 categories:
  - java
  - cglib
