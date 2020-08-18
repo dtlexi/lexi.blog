@@ -1,3 +1,17 @@
+---
+title: Spring扩展之CGLib应用
+date: 2020-08-18 00:00:00
+cover: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/17.jpg
+top_img: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/18.jpeg
+categories:
+ - java
+ - cglib
+tags:
+ - java
+ - cglib
+---
+
+
 Spring中大量使用的CGLib实现代理，为了方便大家理解源码，在此写一篇关于CGLib使用的博客。
 
 CGLib和JDK动态代理都是动态代理的实现，和JDK动态代理要求被代理对象必须实现一个接口不同的是CGLib允许对象是一个单独的对象。
