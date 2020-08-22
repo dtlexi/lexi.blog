@@ -1,5 +1,5 @@
 ---
-title: Spring源码分析之BeanPostProcessor
+title: spring源码分析之BeanPostProcessor
 date: 2020-08-10
 cover: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/15.jfif
 top_img: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/16.jfif

@@ -1,5 +1,5 @@
 ---
-title: Spring源码分析-BeanDefintion
+title: spring源码分析-BeanDefintion
 date: 2020-06-30 00:00:00
 cover: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/9.jpg
 top_img: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/big5.jpeg

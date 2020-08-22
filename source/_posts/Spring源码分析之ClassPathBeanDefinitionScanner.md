@@ -1,5 +1,5 @@
 ---
-title: Spring源码分析-ClassPathBeanDefinitionScanner
+title: spring源码分析-ClassPathBeanDefinitionScanner
 date: 2020-07-02
 cover: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/14.jpg
 top_img: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/big5.jpeg
