@@ -16,7 +16,7 @@ tags:
 `doCreateBean`方法是spring最后真正用来创建对象的方法。spring创建bean过程中的实例化对象，属性赋值，执行生命周期函数都是在当前方法中完成的。是spring生命周期中最重要的一个方法
 
 下面我们来具体分析一下该方法
-```
+```java
 protected Object doCreateBean(final String beanName, final RootBeanDefinition mbd, final @Nullable Object[] args)
       throws BeanCreationException {
 
