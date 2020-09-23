@@ -2,7 +2,7 @@
 title: spring源码分析-循环引用
 date: 2020-09-22
 cover: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/spring源码分析之循环引用/cover.jpg
-cover: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/spring源码分析之循环引用/top.jpg
+top_img: https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/spring源码分析之循环引用/top.jpg
 categories:
  - java
  - spring
@@ -28,9 +28,10 @@ spring循环依赖在面试中是一个很高频的问题，循环依赖相关�
 所谓的循环依赖是指，A 依赖 B，B 又依赖 A，它们之间形成了循环依赖。或者是 A 依赖 B，B 依赖 C，C 又依赖 A。它们之间的依赖关系如下：
 
 
-
-
 spring循环引用又分为属性循环引用和构造方法循环引用，他们的代码实现关系如下
+
+![循环依赖](https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/spring源码分析之循环引用/1.jpg)
+
 
 ### 构造方法循环引用
 
@@ -179,6 +180,8 @@ Exception in thread "main" java.lang.StackOverflowError
     ...
 ```
 接下来尝试画一下程序执行流程图，如下：
+
+![流程图](https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/spring源码分析之循环引用/2.jpg)
 
 从上面的流程图我们可以看出`createBean(a)`,`popilateBean(b)`,`createBean(B)`,`popilateBean(a)`,`createBean(a)`,`popilateBean(b)`...的循环中，从而导致`StackOverflowError`。
 
@@ -387,7 +390,7 @@ com.lexi.service.B$$EnhancerByCGLIB$$71ff370b@3d71d552
 `beanFactory.getBean(B.class).getA()`获取的是B对象中的a，如下图所示，B.a 赋值发生在`warp(a)`之前,此时a对象还没有添加代理，是原始的a对象
 流程图如下：
 
-
+![流程图2](https://cdn.jsdelivr.net/gh/dtlexi/lexi.blog/src/image/spring源码分析之循环引用/3.jpg)
 
 找到问题了，那么该如何解决问题呢?将`wrapInstance`提升到`earlySingletonObjects.put(beanName,bean)`之前？
 这样看上去行得通，可是此时对象刚创建完成，对象还没有完全初始化，此时修改对象，可能新的对象不是我们想要的对象。而且如果将`wrapInstance`提前到，那么之后的所有操作都是针对于`warpInstance`。会导致不可预料的问题。
