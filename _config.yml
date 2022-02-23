@@ -5,7 +5,7 @@
 # Site
 title: Lexi想学Java
 subtitle: 教练，我想学java
-description: 一只混迹于互联网五年的老鸟，除了老，其他啥也没留下 <br/><a href='http://47.101.57.44/'>博客阿里云地址</a>
+description: 一只混迹于互联网五年的老鸟，除了老，其他啥也没留下
 keywords: Java，java，Spring，spring，源码分析，Mybatis，mybatis
 author: Lexi Ren
 language: zh-CN
@@ -13,7 +13,7 @@ timezone: ''
 
 # URL
 ## If your site is put in a subdirectory, set url as 'http://yoursite.com/child' and root as '/child/'
-url: http://www.renjilin.online
+url: https://www.renjilin.top
 root: /
 permalink: :category/:title.html
 permalink_defaults:
